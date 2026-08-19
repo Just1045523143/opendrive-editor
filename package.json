@@ -1,0 +1,24 @@
+{
+  "name": "opendrive-editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "在线高精路网编辑器：基于卫星影像绘制并导出 ASAM OpenDRIVE",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/geometry.test.ts test/roundtrip.test.ts test/geo.test.ts test/math.test.ts test/road.test.ts test/integration.test.ts test/junction.test.ts test/laneConnect.test.ts test/laneTaper.test.ts"
+  },
+  "dependencies": {
+    "proj4": "2.21.0",
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "@types/three": "0.185.4",
+    "typescript": "5.9.3",
+    "vite": "8.2.1"
+  }
+}

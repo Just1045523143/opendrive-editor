@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>高精路网在线编辑器 · OpenDRIVE</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="toolbar" id="toolbar"></header>
+      <aside class="rail" id="rail"></aside>
+      <main class="stage">
+        <canvas id="canvas"></canvas>
+        <div class="attribution" id="attribution"></div>
+        <div class="hint" id="hint"></div>
+        <div class="toast" id="toast" role="status" aria-live="polite"></div>
+      </main>
+      <aside class="side" id="side"></aside>
+      <footer class="status" id="status"></footer>
+    </div>
+    <div class="modal-backdrop" id="modal-backdrop" hidden>
+      <div class="modal" id="modal"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
