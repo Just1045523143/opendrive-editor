@@ -23,6 +23,19 @@
 
 ## 快速开始
 
+# 这里需要确定node的版本
+```bash
+export NVM_DIR="$HOME/.nvm"
+source "$NVM_DIR/nvm.sh"
+
+nvm use 22.18.0
+hash -r
+
+node -v
+which node
+npm -v
+```
+
 ```bash
 # 安装依赖
 npm install
@@ -183,3 +196,6 @@ MIT
 - [libOpenDRIVE](https://github.com/pageldev/libOpenDRIVE) — C++ 解析库（Apache-2.0，本项目行为参照）
 - [pyoscx/scenariogeneration](https://github.com/pyoscx/scenariogeneration) — Python 生成库（MPL-2.0，本项目行为参照）
 - [Fresnel integral](https://en.wikipedia.org/wiki/Fresnel_integral) — clothoid 参数方程
+
+
+## 开发记录

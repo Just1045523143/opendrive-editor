@@ -86,6 +86,34 @@ describe('绘制到导出全链路', () => {
     assert.equal(xml1, xml2);
   });
 
+  test('导出时将 standard 标线颜色显式写为 white，兼容 Apollo routing', () => {
+    const doc = createEmptyDocument(CRS.proj);
+    const built = buildRoadFromPoints('1', TRACE, DEFAULT_FIT, {
+      ...DEFAULT_TEMPLATE,
+      leftLanes: 3,
+      rightLanes: 3,
+    });
+    assert.ok(built !== null, '应成功建路');
+    doc.roads.push(built!.road);
+
+    const xml = serializeOpenDrive(doc);
+    assert.doesNotMatch(
+      xml,
+      /<roadMark\b[^>]*\bcolor="standard"/,
+      'Apollo imap 会把 standard 转为 UNKNOWN 边界',
+    );
+    assert.match(
+      xml,
+      /<roadMark\b[^>]*\btype="broken"[^>]*\bcolor="white"/,
+      '内部虚线应显式导出为白色，以生成 DOTTED_WHITE 变道边',
+    );
+    assert.match(
+      xml,
+      /<roadMark\b[^>]*\btype="solid"[^>]*\bcolor="white"/,
+      '外侧实线也应显式导出为白色',
+    );
+  });
+
   test('多条道路 id 递增且互不干扰', () => {
     const doc = createEmptyDocument(CRS.proj);
     for (let i = 0; i < 4; i++) {

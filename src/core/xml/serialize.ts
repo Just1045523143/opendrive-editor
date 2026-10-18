@@ -173,11 +173,15 @@ function writeLane(lane: Lane, ind: string): string {
   }
 
   for (const m of lane.roadMarks) {
+    // The editor treats OpenDRIVE's "standard" road-mark color as white.
+    // Emit that color explicitly because Apollo's imap converter otherwise
+    // maps the boundary to UNKNOWN and routing cannot create lane-change edges.
+    const color = m.color === 'standard' ? 'white' : m.color;
     out += `${ind}  <roadMark${attrs([
       ['sOffset', m.sOffset],
       ['type', m.type],
       ['weight', m.weight],
-      ['color', m.color],
+      ['color', color],
       ['material', m.material],
       ['width', m.width],
       ['laneChange', m.laneChange],
