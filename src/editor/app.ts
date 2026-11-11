@@ -20,7 +20,9 @@ import { reprojectDocument, snapshotEndpoints, measureReprojectionError } from '
 import { findTileSource, TILE_SOURCES } from '../geo/tiles.ts';
 import { Inspector } from '../ui/inspector.ts';
 import { rebuildSide, type PanelContext } from '../ui/panels.ts';
-import { button, clear, downloadText, el, pickTextFile } from '../ui/dom.ts';
+import { button, clear, downloadText, el, pickTextFile, selectRow } from '../ui/dom.ts';
+import { FURNITURE, drawFurnitureIcon, groundPolygons } from './furniture.ts';
+import { FurnitureTool } from './tools/furnitureTool.ts';
 import { Preview3D } from './preview3d.ts';
 import { isProjectFile, parseProject, serializeProject } from './project.ts';
 import { buildRoadRenderData, type RoadRenderData } from './renderData.ts';
@@ -58,12 +60,14 @@ export class App {
 
   private tools: Record<ToolId, Tool>;
   private activeToolId: ToolId = 'select';
+  private furniturePalette: HTMLElement | null = null;
 
   private dirty = true;
   private rafId = 0;
 
   private preview3d: Preview3D | null = null;
   private preview3dHost: HTMLElement | null = null;
+  private preview3dButton: HTMLButtonElement | null = null;
 
   /** 渲染数据缓存，供拾取复用 */
   private renderDataCache: RoadRenderData[] = [];
@@ -129,6 +133,7 @@ export class App {
       laneLink: new LaneLinkTool(),
       split: new SplitTool(),
       measure: new MeasureTool(),
+      furniture: new FurnitureTool(),
       lane: new SelectTool(), // 车道编辑走检查器,此处复用选择工具
     };
 
@@ -204,6 +209,7 @@ export class App {
       template: this.template,
       fit: this.fit,
       snap: this.snap,
+      showFurniture: this.renderOptions.showFurniture,
     };
   }
 
@@ -243,6 +249,11 @@ export class App {
     c.addEventListener('pointerup', (e) => {
       if (c.hasPointerCapture(e.pointerId)) c.releasePointerCapture(e.pointerId);
       this.activeTool.onPointerUp?.(this.toolContext, this.toPointerInput(e));
+      this.updateCursor();
+    });
+
+    c.addEventListener('pointercancel', () => {
+      this.activeTool.onKeyDown?.(this.toolContext, { key: 'Escape' } as KeyboardEvent);
       this.updateCursor();
     });
 
@@ -321,6 +332,9 @@ export class App {
         return;
       }
 
+      if (e.key === 'Escape' && this.activeToolId === 'furniture') {
+        this.setTool('select'); e.preventDefault(); return;
+      }
       const shortcuts: Record<string, ToolId> = {
         v: 'select',
         d: 'draw',
@@ -328,6 +342,7 @@ export class App {
         l: 'laneLink',
         c: 'split',
         m: 'measure',
+        f: 'furniture',
       };
       const tool = shortcuts[e.key.toLowerCase()];
       if (tool && !ctrl) {
@@ -408,8 +423,15 @@ export class App {
 
   private setTool(id: ToolId): void {
     if (id === this.activeToolId) return;
+    if (id === 'furniture') {
+      if (this.preview3d) this.togglePreview3D();
+      this.renderOptions.showFurniture = true;
+    }
     this.activeTool.onDeactivate?.(this.toolContext);
     this.activeToolId = id;
+    this.furniturePalette?.remove();
+    this.furniturePalette = null;
+    if (id === 'furniture') this.buildFurniturePalette();
     this.activeTool.onActivate?.(this.toolContext);
     this.buildRail();
     this.updateCursor();
@@ -426,6 +448,7 @@ export class App {
       { id: 'laneLink', glyph: '⤳' },
       { id: 'split', glyph: '⊣' },
       { id: 'measure', glyph: '⟺' },
+      { id: 'furniture', glyph: '🚦' },
     ];
 
     for (const entry of entries) {
@@ -433,7 +456,7 @@ export class App {
       const btn = el('button', {
         class: `tool-btn${entry.id === this.activeToolId ? ' active' : ''}`,
         title: `${tool.label} — ${tool.hint}`,
-        onclick: () => this.setTool(entry.id),
+        onclick: () => this.setTool(entry.id === 'furniture' && this.activeToolId === 'furniture' ? 'select' : entry.id),
       },
         el('span', { class: 'glyph', text: entry.glyph }),
         el('span', { text: tool.label }),
@@ -442,9 +465,44 @@ export class App {
     }
   }
 
+  private buildFurniturePalette(): void {
+    const tool = this.tools.furniture as FurnitureTool;
+    const palette = el('div', { class: 'furniture-palette', role: 'region', 'aria-label': '交通设施放置' });
+    palette.append(el('strong', { text: '交通设施 · 点击地图放置' }),
+      button('关闭 (Esc)', () => this.setTool('select')));
+    const choices = el('div', { class: 'furniture-choices' });
+    for (const [kind, label] of FURNITURE) {
+      const choice = button(label, () => {
+        tool.kind = kind;
+        this.furniturePalette?.remove(); this.buildFurniturePalette(); this.requestRedraw();
+      });
+      choice.classList.toggle('active', tool.kind === kind);
+      choice.setAttribute('aria-pressed', String(tool.kind === kind));
+      const icon = el('canvas', { width: 28, height: 28, 'aria-hidden': 'true' });
+      const c = icon.getContext('2d');
+      if (c) {
+        c.translate(14,14); c.scale(25,25);
+        if (kind.startsWith('arrow') || kind === 'crosswalk' || kind === 'stopLine') {
+          c.fillStyle = 'white';
+          for (const poly of groundPolygons(kind)) {
+            c.beginPath(); poly.forEach(([u,v], i) => { if (i === 0) c.moveTo(u!, -v!); else c.lineTo(u!, -v!); }); c.closePath(); c.fill();
+          }
+        } else drawFurnitureIcon(c, kind);
+      }
+      choice.prepend(icon); choices.append(choice);
+    }
+    palette.append(choices, selectRow('朝向', tool.orientation,
+      [{ value: 'auto' as const, label: '按所在道路侧自动判断' }, { value: '+' as const, label: '沿 +s 行驶方向' }, { value: '-' as const, label: '沿 −s 行驶方向' }],
+      v => { tool.orientation = v; this.requestRedraw(); }),
+      el('p', { class: 'note', text: '悬停查看所属道路，单击连续放置。添加后在右侧调整高度、限速等属性。' }));
+    this.dom.stage.append(palette); this.furniturePalette = palette;
+  }
+
   private buildToolbar(): void {
     const t = this.dom.toolbar;
     clear(t);
+    this.preview3dButton = button('3D 预览', () => this.togglePreview3D());
+    this.updatePreviewModeButton();
 
     t.append(
       el('strong', { text: '高精路网编辑器' }),
@@ -464,7 +522,7 @@ export class App {
       }, { title: 'Ctrl+Y' }),
       el('span', { class: 'sep' }),
       button('全览', () => this.fitAll()),
-      button('3D 预览', () => this.togglePreview3D()),
+      this.preview3dButton,
       el('span', { class: 'spacer' }),
       button('说明', () => this.showHelp()),
     );
@@ -723,19 +781,41 @@ export class App {
       this.preview3d = null;
       this.preview3dHost?.remove();
       this.preview3dHost = null;
+      this.updatePreviewModeButton();
       this.requestRedraw();
       return;
     }
 
+    // 结束 2D 放置模式，避免高层级面板继续遮住 3D 画布。
+    if (this.activeToolId === 'furniture') this.setTool('select');
     const host = el('div', { class: 'preview-3d' });
     this.dom.stage.append(host);
     this.preview3dHost = host;
-    this.preview3d = new Preview3D(host);
-    this.preview3d.build(this.store.document, Math.max(0.05, this.renderOptions.tolerance));
+    try {
+      this.preview3d = new Preview3D(host);
+      this.preview3d.build(this.store.document, Math.max(0.05, this.renderOptions.tolerance));
+    } catch (error) {
+      this.preview3d?.dispose();
+      this.preview3d = null;
+      host.remove();
+      this.preview3dHost = null;
+      this.updatePreviewModeButton();
+      this.requestRedraw();
+      this.store.notify('error', `3D 预览开启失败：${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+    this.updatePreviewModeButton();
     this.store.notify(
       'info',
-      `3D 预览已开启（${this.preview3d.triangleCount} 三角面）。左键旋转、右键或 Shift 平移、滚轮缩放。`,
+      `3D 预览已开启（${this.preview3d.triangleCount} 三角面）。设施图标标示位置，不代表实时灯态。左键旋转、右键或 Shift 平移、滚轮缩放。`,
     );
+  }
+
+  private updatePreviewModeButton(): void {
+    const active = this.preview3d !== null;
+    this.preview3dButton?.classList.toggle('active', active);
+    this.preview3dButton?.setAttribute('aria-pressed', String(active));
+    if (this.preview3dButton) this.preview3dButton.title = active ? '当前为 3D 模式，点击返回俯视编辑' : '切换到 3D 预览';
   }
 
   /* ---------- 帮助 ---------- */

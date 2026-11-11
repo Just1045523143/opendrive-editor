@@ -276,11 +276,11 @@ for (let i = 0; i < 4; i++) {
 ### 3D
 - [x] 高程与横坡（经 `stToXyz`，横坡使左侧下沉已测）
 - [ ] 路面纹理与标线
-- [ ] 路侧物体（object）
+- [x] 常用交通灯、路牌、路面标记静态预览（未知 object 不渲染）
 
 ### 导入导出
 - [x] junction（交叉口）解析、序列化、生成、删除
-- [x] signal / controller 解析与序列化（无编辑界面）
+- [x] signal / controller 解析与序列化；常用 signal 位置编辑，controller 编辑待实现
 - [x] 导入容错（非法几何跳过并累积警告，不中断解析）
 - [ ] railroad（铁路）
 - [ ] 交叉口的导流线与停止线

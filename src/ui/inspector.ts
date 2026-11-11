@@ -8,8 +8,9 @@ import { DEFAULT_FIT, type FitMode } from '../core/geometry/alignment.ts';
 import { evaluateGeometry } from '../core/geometry/evaluate.ts';
 import type { Geometry } from '../core/geometry/types.ts';
 import type { Vec2 } from '../core/math/vec.ts';
+import { FURNITURE, furnitureItems, refreshGroundOutline, removeFurniture } from '../editor/furniture.ts';
 import { findLane, type LaneType, type RoadMarkType } from '../core/model/lane.ts';
-import { laneSectionRange, type Road } from '../core/model/road.ts';
+import { laneSectionRange, type Road, type RoadObject, type RoadSignal } from '../core/model/road.ts';
 import { laneWidthAt } from '../core/model/lanes.ts';
 import {
   addLane,
@@ -97,6 +98,9 @@ export class Inspector {
       case 'road':
       case 'controlPoint':
         this.renderRoad(sel.roadId);
+        break;
+      case 'furniture':
+        this.renderFurniture(sel.roadId);
         break;
       case 'geometry':
         this.renderRoad(sel.roadId);
@@ -195,8 +199,62 @@ export class Inspector {
     body.append(kv([['前驱', linkText('predecessor')], ['后继', linkText('successor')]]));
 
     this.root.append(panel(`道路 ${road.id}`, body));
+    this.renderFurniture(roadId);
     this.renderAlignment(roadId);
     this.renderLaneList(roadId);
+  }
+
+  private renderFurniture(roadId: string): void {
+    const road = this.road(roadId);
+    if (!road) return;
+    const body = el('div');
+    body.append(el('p', { class: 'note', text: '使用左侧 🚦 交通设施工具在地图上点选添加（F）。在这里调整已有设施的位置和属性。' }));
+    for (const item of furnitureItems(road)) {
+      const source = item.source;
+      const selection = this.store.selection;
+      const selected = selection.kind === 'furniture' && selection.roadId === roadId && selection.furnitureId === source.id
+        && selection.sourceType === (road.signals.includes(source) ? 'signal' : 'object');
+      if (selection.kind === 'furniture' && !selected) continue;
+      const edit = (fn: () => void) => {
+        this.store.mutate(fn); this.hooks.invalidate(roadId); this.hooks.requestRedraw(); this.render();
+      };
+      const fields = el('div');
+      fields.append(
+        numberRow('s (m)', source.s, v => edit(() => { source.s = Math.max(0, Math.min(road.length, v)); }), { min: 0, max: road.length, step: 1 }),
+        numberRow('t (m)', source.t, v => edit(() => { source.t = v; }), { step: 0.25 }),
+        numberRow('zOffset (m)', source.zOffset ?? 0, v => edit(() => { source.zOffset = v; }), { step: 0.1 }),
+      );
+      const isSignal = road.signals.includes(source);
+      if (isSignal) fields.append(selectRow('适用方向', (source as RoadSignal).orientation ?? '+',
+        [{ value: '+' as const, label: '沿 +s' }, { value: '-' as const, label: '沿 −s' }, { value: 'none' as const, label: '双向' }],
+        v => edit(() => { (source as RoadSignal).orientation = v; })));
+      const angle = isSignal ? 'hOffset' : 'hdg';
+      for (const key of [angle, 'pitch', 'roll']) {
+        const raw = key === 'hdg' ? (source as RoadObject).hdg : Number(source.extraAttrs?.[key]);
+        fields.append(numberRow(`${key} (°)`, (raw || 0) * 180 / Math.PI, v => edit(() => {
+          if (key === 'hdg') (source as RoadObject).hdg = v * Math.PI / 180;
+          else { source.extraAttrs ??= {}; source.extraAttrs[key] = String(v * Math.PI / 180); }
+        }), { step: 5 }));
+      }
+      if (item.kind === 'speed' && isSignal) fields.append(numberRow('限速 (km/h)', item.value ?? 50, v => edit(() => {
+        const sg = source as RoadSignal;
+        sg.value = Math.max(1, v); sg.subtype = String(sg.value);
+        sg.extraAttrs = { ...sg.extraAttrs, unit: 'km/h' };
+      }), { min: 1 }));
+      if (item.ground && source.rawChildren?.includes('code="opendrive-editor"')) {
+        const object = source as RoadObject;
+        for (const key of ['length', 'width'] as const) fields.append(numberRow(`${key} (m)`, object[key] ?? 1, v => edit(() => {
+          object[key] = Math.max(0.1, v);
+          refreshGroundOutline(object, item.kind);
+        }), { min: 0.1, step: 0.1 }));
+      }
+      fields.append(button('删除设施', () => edit(() => {
+        removeFurniture(this.store.document, road, source);
+        if (selected) this.store.select({ kind: 'road', roadId });
+      })));
+      body.append(panel(`${FURNITURE.find(([k]) => k === item.kind)![1]} #${source.id}`, fields, { collapsed: !selected }));
+    }
+    this.root.append(panel('交通设施 / 路面标记', body));
   }
 
   /** 线形参数与重拟合 */

@@ -17,13 +17,17 @@ import { crossSectionAt, laneWidthAt, laneBoundaryAt } from '../../core/model/la
 import { laneSectionRange, type Road } from '../../core/model/road.ts';
 import { MIN_TAPER_LENGTH, taperLaneWidth, type TaperResult } from '../laneTaper.ts';
 import type { PointerInput, Tool, ToolContext } from './types.ts';
+import { FurnitureDrag } from './furnitureDrag.ts';
+import { selectedFurniture } from '../furnitureInteraction.ts';
+import { removeFurniture } from '../furniture.ts';
 
 type DragMode = 'none' | 'pan' | 'controlPoint' | 'taperStart' | 'taperEnd';
 
 export class SelectTool implements Tool {
   readonly id = 'select' as const;
   readonly label = '选择';
-  readonly hint = '点击选中；拖动方形控制点改线形；中键或按住空格平移；Delete 删除道路';
+  readonly hint = '点击选中并拖动交通设施；拖动方形控制点改线形；中键或空格平移；Delete 删除选中对象';
+  private readonly furnitureDrag = new FurnitureDrag();
 
   private mode: DragMode = 'none';
   private lastScreen: Vec2 = { x: 0, y: 0 };
@@ -43,6 +47,12 @@ export class SelectTool implements Tool {
   private previewTaperStart = 0;  // 拖动时的预览参数
   private previewTaperLength = 0;
 
+  onDeactivate(ctx: ToolContext): void {
+    this.furnitureDrag.cancel(ctx);
+    if (this.mode === 'controlPoint' || this.mode === 'taperStart' || this.mode === 'taperEnd') ctx.store.commit();
+    this.mode = 'none'; this.dragRoadId = null;
+  }
+
   onPointerDown(ctx: ToolContext, e: PointerInput): void {
     this.lastScreen = { ...e.screen };
     this.movedSinceDown = false;
@@ -53,6 +63,7 @@ export class SelectTool implements Tool {
       return;
     }
     if (e.button !== 0) return;
+    if (this.furnitureDrag.start(ctx, e)) return;
 
     const tolMeters = ctx.viewport.pixelsToMeters(ctx.snap.radiusPx);
     const activeRoadId = ctx.store.selectedRoadId;
@@ -102,6 +113,7 @@ export class SelectTool implements Tool {
   }
 
   onPointerMove(ctx: ToolContext, e: PointerInput): void {
+    if (this.furnitureDrag.active) { this.furnitureDrag.move(ctx, e); return; }
     const dx = e.screen.x - this.lastScreen.x;
     const dy = e.screen.y - this.lastScreen.y;
     if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) this.movedSinceDown = true;
@@ -172,6 +184,7 @@ export class SelectTool implements Tool {
   }
 
   onPointerUp(ctx: ToolContext, e: PointerInput): void {
+    if (this.furnitureDrag.active) { this.furnitureDrag.finish(ctx, e); return; }
     if (this.mode === 'controlPoint') {
       ctx.store.commit();
     }
@@ -249,7 +262,18 @@ export class SelectTool implements Tool {
   }
 
   onKeyDown(ctx: ToolContext, e: KeyboardEvent): boolean {
+    if (e.key === 'Escape' && this.furnitureDrag.active) { this.furnitureDrag.cancel(ctx); return true; }
     if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (ctx.store.selection.kind === 'furniture') {
+        this.furnitureDrag.cancel(ctx);
+        const hit = selectedFurniture(ctx.store.document, ctx.store.selection);
+        if (hit) {
+          ctx.store.mutate(() => removeFurniture(ctx.store.document, hit.road, hit.item.source));
+          ctx.store.select({ kind: 'road', roadId: hit.road.id });
+          ctx.invalidate(hit.road.id); ctx.requestRedraw();
+        }
+        return true;
+      }
       const roadId = ctx.store.selectedRoadId;
       if (!roadId) return false;
 
@@ -317,6 +341,7 @@ export class SelectTool implements Tool {
   }
 
   cursor(ctx: ToolContext): string {
+    if (this.furnitureDrag.active) return 'grabbing';
     if (this.mode === 'pan' || this.spacePressed) return 'grabbing';
     if (this.mode === 'controlPoint' || this.mode === 'taperStart' || this.mode === 'taperEnd') {
       return 'grabbing';
@@ -325,6 +350,7 @@ export class SelectTool implements Tool {
   }
 
   draw(ctx: ToolContext, canvas: CanvasRenderingContext2D): void {
+    this.furnitureDrag.draw(ctx, canvas);
     // 绘制渐变拖拽预览
     if ((this.mode === 'taperStart' || this.mode === 'taperEnd') && this.dragRoadId && this.previewTaperLength > 0) {
       const road = ctx.store.document.roads.find((r) => r.id === this.dragRoadId);

@@ -15,6 +15,7 @@ import {
   DirectionalLight,
   DoubleSide,
   GridHelper,
+  Group,
   Line,
   LineBasicMaterial,
   Mesh,
@@ -31,6 +32,7 @@ import { findLane } from '../core/model/lane.ts';
 import { boundsCenter, computeBounds } from '../core/model/bounds.ts';
 import type { OdrDocument } from '../core/model/document.ts';
 import { laneColor } from './renderData.ts';
+import { buildFurniture3D, disposeFurniture3D, updateFurnitureBadges } from './furniture3d.ts';
 
 interface MeshBuffers {
   positions: number[];
@@ -110,6 +112,7 @@ export class Preview3D {
   private roadMesh: Mesh | null = null;
   private refLines: Line[] = [];
   private grid: GridHelper | null = null;
+  private furniture: Group | null = null;
 
   /** 轨道相机参数 */
   private target = new Vector3(0, 0, 0);
@@ -200,6 +203,10 @@ export class Preview3D {
     if (this.disposed) return;
 
     // 清理旧对象
+    if (this.furniture) {
+      this.scene.remove(this.furniture);
+      disposeFurniture3D(this.furniture);
+    }
     if (this.roadMesh) {
       this.scene.remove(this.roadMesh);
       this.roadMesh.geometry.dispose();
@@ -220,6 +227,8 @@ export class Preview3D {
 
     const bounds = computeBounds(doc);
     const origin = bounds ? boundsCenter(bounds) : { x: 0, y: 0 };
+    this.furniture = buildFurniture3D(doc, origin);
+    this.scene.add(this.furniture);
 
     const buf: MeshBuffers = { positions: [], colors: [] };
     for (const road of doc.roads) appendRoad(road, origin, buf, tolerance);
@@ -264,11 +273,13 @@ export class Preview3D {
       this.target.z + this.distance * cosE * Math.cos(this.azimuth),
     );
     this.camera.lookAt(this.target);
+    if (this.furniture) updateFurnitureBadges(this.furniture, this.camera, this.container.clientHeight);
     this.renderer.render(this.scene, this.camera);
   }
 
   dispose(): void {
     this.disposed = true;
+    if (this.furniture) disposeFurniture3D(this.furniture);
     if (this.roadMesh) {
       this.roadMesh.geometry.dispose();
       (this.roadMesh.material as MeshStandardMaterial).dispose();

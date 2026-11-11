@@ -8,6 +8,8 @@
  */
 
 import { evaluateGeometry } from '../core/geometry/evaluate.ts';
+import { furnitureItems } from './furniture.ts';
+import { drawFurnitureItem, selectedFurniture } from './furnitureInteraction.ts';
 import type { Vec2 } from '../core/math/vec.ts';
 import { fromAngle } from '../core/math/vec.ts';
 import type { OdrDocument } from '../core/model/document.ts';
@@ -36,6 +38,7 @@ export interface RenderOptions {
   showRoadIds: boolean;
   /** 交叉口范围与编号 */
   showJunctions: boolean;
+  showFurniture: boolean;
   /** 采样弦高容差（米），越小越平滑越慢 */
   tolerance: number;
 }
@@ -50,6 +53,7 @@ export const DEFAULT_RENDER_OPTIONS: RenderOptions = {
   showLaneIds: false,
   showRoadIds: true,
   showJunctions: true,
+  showFurniture: true,
   tolerance: 0.05,
 };
 
@@ -127,6 +131,7 @@ export class Renderer {
     }
 
     if (this.options.showJunctions) this.drawJunctions(ctx, doc);
+    if (this.options.showFurniture) this.drawFurniture(ctx, doc);
 
     this.drawSelection(ctx, doc);
     if (this.options.showControlPoints) this.drawControlPoints(ctx);
@@ -135,6 +140,14 @@ export class Renderer {
   }
 
   /* ---------- 基础绘制工具 ---------- */
+
+  private drawFurniture(ctx: CanvasRenderingContext2D, doc: OdrDocument): void {
+    for (const road of doc.roads) for (const item of furnitureItems(road)) {
+      const p = this.viewport.worldToScreen(item);
+      if (p.x < -40 || p.y < -40 || p.x > this.viewport.size.width + 40 || p.y > this.viewport.size.height + 40) continue;
+      drawFurnitureItem(ctx, this.viewport, item);
+    }
+  }
 
   private path(ctx: CanvasRenderingContext2D, pts: readonly Vec2[]): void {
     ctx.beginPath();
@@ -319,6 +332,11 @@ export class Renderer {
   private drawSelection(ctx: CanvasRenderingContext2D, doc: OdrDocument): void {
     const sel: Selection = this.store.selection;
     if (sel.kind === 'none') return;
+    if (sel.kind === 'furniture') {
+      const hit = this.options.showFurniture ? selectedFurniture(doc, sel) : null;
+      if (hit) drawFurnitureItem(ctx, this.viewport, hit.item, true);
+      return;
+    }
 
     if (sel.kind === 'road' || sel.kind === 'controlPoint') {
       const data = this.renderData(sel.roadId);

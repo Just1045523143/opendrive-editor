@@ -26,6 +26,7 @@ export type Selection =
   | { kind: 'lane'; roadId: string; sectionIndex: number; laneId: number }
   | { kind: 'geometry'; roadId: string; geometryIndex: number }
   | { kind: 'controlPoint'; roadId: string; pointIndex: number }
+  | { kind: 'furniture'; roadId: string; furnitureId: string; sourceType: 'signal' | 'object' }
   | { kind: 'junction'; junctionId: string };
 
 export interface Message {
@@ -169,6 +170,9 @@ export class Store {
     if (sel.kind === 'geometry' && sel.geometryIndex >= road.planView.length) {
       this.select({ kind: 'road', roadId: sel.roadId });
     }
+    if (sel.kind === 'furniture' && !(sel.sourceType === 'signal' ? road.signals : road.objects).some(o => o.id === sel.furnitureId)) {
+      this.select({ kind: 'road', roadId: sel.roadId });
+    }
     if (sel.kind === 'controlPoint') {
       const rec = this.alignments.get(sel.roadId);
       if (!rec || sel.pointIndex >= rec.points.length) {
@@ -188,7 +192,7 @@ export class Store {
 
   get selectedRoadId(): string | null {
     const s = this.selection;
-    return s.kind === 'road' || s.kind === 'lane' || s.kind === 'geometry' || s.kind === 'controlPoint'
+    return s.kind === 'road' || s.kind === 'lane' || s.kind === 'geometry' || s.kind === 'controlPoint' || s.kind === 'furniture'
       ? s.roadId
       : null;
   }

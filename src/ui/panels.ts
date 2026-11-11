@@ -123,6 +123,7 @@ export function buildLayerPanel(ctx: PanelContext): HTMLElement {
     toggle('网格', 'showGrid'),
     toggle('车道面', 'showLaneFill'),
     toggle('车道标线', 'showRoadMarks'),
+    toggle('交通设施 / 路面标记', 'showFurniture'),
     toggle('参考线', 'showReferenceLine'),
     toggle('控制点', 'showControlPoints'),
     toggle('道路编号', 'showRoadIds'),

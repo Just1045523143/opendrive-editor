@@ -15,7 +15,8 @@ export type ToolId =
   | 'split'
   | 'measure'
   | 'junction'
-  | 'laneLink';
+  | 'laneLink'
+  | 'furniture';
 
 /** 吸附设置 */
 export interface SnapSettings {
@@ -50,6 +51,8 @@ export interface ToolContext {
   /** 线形拟合参数 */
   fit: FitOptions;
   snap: SnapSettings;
+  /** 隐藏的设施不参与拾取。省略时默认显示。 */
+  showFurniture?: boolean;
 }
 
 /** 指针事件（已换算到工程坐标） */
