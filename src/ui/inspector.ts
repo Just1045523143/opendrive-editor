@@ -9,6 +9,7 @@ import { evaluateGeometry } from '../core/geometry/evaluate.ts';
 import type { Geometry } from '../core/geometry/types.ts';
 import type { Vec2 } from '../core/math/vec.ts';
 import { FURNITURE, furnitureItems, refreshGroundOutline, removeFurniture } from '../editor/furniture.ts';
+import { setStopLineLight, stopLineLights, trafficLights } from '../editor/stopLineRelations.ts';
 import { findLane, type LaneType, type RoadMarkType } from '../core/model/lane.ts';
 import { laneSectionRange, type Road, type RoadObject, type RoadSignal } from '../core/model/road.ts';
 import { laneWidthAt } from '../core/model/lanes.ts';
@@ -247,6 +248,24 @@ export class Inspector {
           object[key] = Math.max(0.1, v);
           refreshGroundOutline(object, item.kind);
         }), { min: 0.1, step: 0.1 }));
+      }
+      if (item.kind === 'stopLine' && !isSignal) {
+        const lights = trafficLights(road);
+        const bound = new Set(stopLineLights(road, source));
+        fields.append(el('p', { class: 'note', text: '绑定交通灯（可多选，同一道路）' }));
+        if (!lights.length) fields.append(el('p', { class: 'note', text: '请先在这条道路上添加交通灯。' }));
+        for (const light of lights) fields.append(checkRow(
+          `交通灯 #${light.id} · s=${light.s.toFixed(1)} / t=${light.t.toFixed(1)}`,
+          bound.has(light), value => edit(() => setStopLineLight(road, source, light, value)),
+        ));
+        fields.append(el('p', { class: 'note', text: 'width 为横跨车道的长度，length 为沿道路的线宽；请调整位置和尺寸，使停止线覆盖目标车道。取消勾选可解除绑定。' }));
+      }
+      if (item.kind === 'light') {
+        const lines = furnitureItems(road).filter(other => other.kind === 'stopLine'
+          && stopLineLights(road, other.source).includes(source as RoadSignal));
+        fields.append(el('p', { class: 'note', text: lines.length
+          ? `已绑定停止线：${lines.map(line => `#${line.source.id}`).join('、')}`
+          : '尚未绑定停止线；选中停止线可设置绑定。' }));
       }
       fields.append(button('删除设施', () => edit(() => {
         removeFurniture(this.store.document, road, source);

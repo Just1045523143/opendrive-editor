@@ -2,6 +2,7 @@
 import type { OdrDocument } from '../core/model/document.ts';
 import type { Road, RoadObject, RoadSignal } from '../core/model/road.ts';
 import { referencePoint } from '../core/model/reference.ts';
+import { isTrafficLight, removeFacilityReferences } from './stopLineRelations.ts';
 
 export const FURNITURE = [
   ['light', '三色交通灯'], ['speed', '限速牌'], ['stop', '停车让行'],
@@ -39,7 +40,7 @@ export function furnitureItems(road: Road): FurnitureItem[] {
     if (signal) {
       const sg = source as RoadSignal;
       if (sg.country === 'DE' || sg.country === 'OpenDRIVE') kind = CODES[sg.type ?? ''];
-      if (sg.type === 'trafficLight') kind = 'light';
+      if (isTrafficLight(sg)) kind = 'light';
       if (kind === 'speed') value = number(sg.value, number(sg.subtype, 50));
     } else {
       const match = /^Speed_(\d+(?:\.\d+)?)$/i.exec(source.name ?? '');
@@ -134,11 +135,12 @@ export function refreshGroundOutline(object: RoadObject, kind: FurnitureKind): v
     + '        </outline>\n').join('') + '      </outlines>\n      <material roadMarkColor="white"/>\n      <userData code="opendrive-editor" value="preset"/>\n';
 }
 
-/** 删除设施时同步清理信号控制引用。 */
+/** 删除设施时同步清理设施关联和信号控制引用。 */
 export function removeFurniture(doc: OdrDocument, road: Road, source: RoadSignal | RoadObject): void {
   const isSignal = road.signals.includes(source);
   road.signals = road.signals.filter(s => s !== source);
   road.objects = road.objects.filter(o => o !== source);
+  removeFacilityReferences(doc, source.id, isSignal ? 'signal' : 'object');
   if (!isSignal) return;
   for (const controller of doc.controllers) controller.controls = controller.controls.filter(c => c.signalId !== source.id);
   const empty = new Set(doc.controllers.filter(c => !c.controls.length).map(c => c.id));

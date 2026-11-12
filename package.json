@@ -9,7 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-transform-types --test test/geometry.test.ts test/roundtrip.test.ts test/geo.test.ts test/math.test.ts test/road.test.ts test/integration.test.ts test/junction.test.ts test/laneConnect.test.ts test/laneTaper.test.ts test/furniture.test.ts test/furnitureDrag.test.ts"
+    "test": "node --experimental-transform-types --test test/geometry.test.ts test/roundtrip.test.ts test/geo.test.ts test/math.test.ts test/road.test.ts test/integration.test.ts test/junction.test.ts test/laneConnect.test.ts test/laneTaper.test.ts test/furniture.test.ts test/furnitureDrag.test.ts test/stopLineRelations.test.ts"
   },
   "dependencies": {
     "proj4": "2.21.0",

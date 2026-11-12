@@ -68,10 +68,13 @@ export class FurnitureTool implements Tool {
     const hit = locateFurniture(ctx, e.world);
     if (!hit) { ctx.store.notify('warn', '请在道路或路旁 8 米内放置设施，避开道路端点以外区域'); return; }
     const { road, s, t } = hit;
-    ctx.store.mutate(() => addFurniture(ctx.store.document, road, this.kind, {
-      s, t, ...(this.orientation === 'auto' ? {} : { orientation: this.orientation }),
-    }));
-    ctx.store.select({ kind: 'road', roadId: road.id });
+    ctx.store.mutate(() => {
+      const source = addFurniture(ctx.store.document, road, this.kind, {
+        s, t, ...(this.orientation === 'auto' ? {} : { orientation: this.orientation }),
+      });
+      ctx.store.select({ kind: 'furniture', roadId: road.id, furnitureId: source.id,
+        sourceType: road.signals.includes(source) ? 'signal' : 'object' });
+    });
     ctx.invalidate(road.id); ctx.requestRedraw();
     ctx.store.notify('info', `已添加${FURNITURE.find(([k]) => k === this.kind)![1]}：R${road.id}，s=${s.toFixed(2)}，t=${t.toFixed(2)}`);
   }

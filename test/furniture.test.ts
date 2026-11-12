@@ -137,6 +137,7 @@ test('鼠标点击生成大坐标道路的实际 s/t，不落到中点，并可�
   assert.ok(Math.abs(source.s - 30) < 1e-6); assert.ok(Math.abs(source.t + 6) < 1e-6);
   assert.equal(source.orientation, '+');
   assert.equal(ctx.store.selectedRoadId, '1');
+  assert.deepEqual(ctx.store.selection, { kind: 'furniture', roadId: '1', furnitureId: source.id, sourceType: 'signal' });
   const xml = serializeOpenDrive(ctx.store.document);
   assert.ok(Math.abs(parseOpenDrive(xml).document.roads[0]!.signals[0]!.s - 30) < 1e-6);
   ctx.store.undo(); assert.equal(ctx.store.document.roads[0]!.signals.length, 0);
